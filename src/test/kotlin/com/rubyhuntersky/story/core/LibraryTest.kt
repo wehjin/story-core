@@ -11,12 +11,12 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.sendBlocking
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertSame
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Test
 
 class LibraryTest {
+
 
     private object Increment
 
@@ -28,7 +28,7 @@ class LibraryTest {
     }
 
     @Test
-    fun `matching story changes after action rule is matched`() {
+    internal fun `matching story changes after action rule is matched`() {
         val story = matchingStory("Matcher", 1, { false }) {
             onAction<Increment, Int> { vision + 1 }
         }
@@ -47,7 +47,7 @@ class LibraryTest {
     }
 
     @Test
-    fun `matching story changes after action-vision rule is matched`() {
+    internal fun `matching story changes after action-vision rule is matched`() {
         val story = matchingStory("Matcher", 1, { false }) {
             on<Increment, Int, Int> { vision + 1 }
         }
@@ -66,26 +66,26 @@ class LibraryTest {
     }
 
     @Test
-    fun `story starts with init`() {
+    internal fun `story starts with init`() {
         val story = counterStory()
         val visions = runBlocking { story.subscribe() }
-        assertSame(5, runBlocking { visions.receive() })
+        assertEquals(5, runBlocking { visions.receive() })
     }
 
     @Test
-    fun `story changes after action`() {
+    internal fun `story changes after action`() {
         val story = counterStory()
         story.offer(Increment)
         val visions = runBlocking { story.subscribe() }
-        assertSame(6, runBlocking { visions.receive() })
+        assertEquals(6, runBlocking { visions.receive() })
     }
 
     @Test
-    fun `story ignores unknown actions`() {
+    internal fun `story ignores unknown actions`() {
         val story = counterStory()
         story.offer(Unit)
         val visions = runBlocking { story.subscribe() }
-        assertSame(5, runBlocking { visions.receive() })
+        assertEquals(5, runBlocking { visions.receive() })
     }
 
     data class Substory(val substory: Story<Int>? = null)
@@ -93,7 +93,7 @@ class LibraryTest {
     data class NotifyTop(val notify: SendChannel<Unit>)
 
     @Test
-    fun `onStoryOver notifies when substory ends`() {
+    internal fun `update scope allows notifying when substory ends`() {
         val topStory = story("Top", Substory(), { false }) { action ->
             when (action) {
                 is Start -> {
@@ -121,7 +121,7 @@ class LibraryTest {
     }
 
     @Test
-    fun `update scope allows offering an action when substory ends`() {
+    internal fun `update scope allows offering an action when substory ends`() {
         val topStory = story("Top", Substory(), { false }) { action ->
             when (action) {
                 is Start -> {
