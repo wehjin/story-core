@@ -46,7 +46,7 @@ publishing {
 
     repositories {
         maven {
-            url "file:/${project.projectDir}/artifacts"
+            url "file:/${project.projectDir}/build/artifacts"
         }
     }
 }
