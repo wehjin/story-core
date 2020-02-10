@@ -48,7 +48,7 @@ class LibraryTest {
 
     @Test
     internal fun `matching story changes after action-vision rule is matched`() {
-        val story = matchingStory("Matcher", 1, { false }) {
+        val story = matchingStory("Matcher", 1, neverEnds) {
             on<Increment, Int, Int> { vision + 1 }
         }
         story.offer(Increment)

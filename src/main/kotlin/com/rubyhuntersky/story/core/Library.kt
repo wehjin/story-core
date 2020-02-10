@@ -97,3 +97,5 @@ fun <V : Any> story(
         actions.offer(action)
     }
 }
+
+val neverEnds = { _: Any -> false }
