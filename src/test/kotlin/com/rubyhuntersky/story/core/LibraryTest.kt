@@ -17,10 +17,13 @@ import org.junit.jupiter.api.Test
 
 class LibraryTest {
 
-
     private object Increment
 
-    private fun counterStory() = story("Sample", 5, { it == 6 }) { action ->
+    private fun counterStory() = story<Int>(
+        name = "Sample",
+        isLastVision = { it == 6 },
+        toFirstVision = { 5 }
+    ) { action: Any ->
         when (action) {
             is Increment -> vision + 1
             else -> null
@@ -29,7 +32,7 @@ class LibraryTest {
 
     @Test
     internal fun `matching story changes after action rule is matched`() {
-        val story = matchingStory("Matcher", 1, { false }) {
+        val story = matchingStory<Int>("Matcher", { 1 }, { false }) {
             onAction<Increment, Int> { vision + 1 }
         }
         story.offer(Increment)
@@ -48,9 +51,9 @@ class LibraryTest {
 
     @Test
     internal fun `matching story changes after action-vision rule is matched`() {
-        val story = matchingStory("Matcher", 1, neverEnds) {
+        val story = matchingStory<Int>("Matcher", { 1 }, neverEnds, {
             on<Increment, Int, Int> { vision + 1 }
-        }
+        })
         story.offer(Increment)
         val value = runBlocking {
             withTimeoutOrNull(1000) {
@@ -94,7 +97,11 @@ class LibraryTest {
 
     @Test
     internal fun `update scope allows notifying when substory ends`() {
-        val topStory = story("Top", Substory(), { false }) { action ->
+        val topStory = story<Substory>(
+            name = "Top",
+            isLastVision = { false },
+            toFirstVision = { Substory() }
+        ) { action: Any ->
             when (action) {
                 is Start -> {
                     val substory = counterStory().also {
@@ -122,7 +129,11 @@ class LibraryTest {
 
     @Test
     internal fun `update scope allows offering an action when substory ends`() {
-        val topStory = story("Top", Substory(), { false }) { action ->
+        val topStory = story<Substory>(
+            name = "Top",
+            isLastVision = { false },
+            toFirstVision = { Substory() }
+        ) { action: Any ->
             when (action) {
                 is Start -> {
                     val substory = counterStory().also {

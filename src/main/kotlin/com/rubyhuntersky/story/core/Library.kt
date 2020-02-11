@@ -5,14 +5,12 @@
 
 package com.rubyhuntersky.story.core
 
-import com.rubyhuntersky.story.core.scopes.MatchedScope
-import com.rubyhuntersky.story.core.scopes.MatchingScope
-import com.rubyhuntersky.story.core.scopes.StoryOverScope
-import com.rubyhuntersky.story.core.scopes.StoryUpdateScope
+import com.rubyhuntersky.story.core.scopes.*
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ConflatedBroadcastChannel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.sendBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.math.absoluteValue
@@ -20,28 +18,33 @@ import kotlin.random.Random
 
 fun <V : Any> matchingStory(
     name: String,
-    init: V,
-    isOver: (V) -> Boolean,
+    toFirstVision: StoryInitScope<V>.() -> V,
+    isLastVision: (V) -> Boolean,
     updateRules: suspend MatchingScope<V>.() -> Unit
-) = story(name, init, isOver) { action ->
-    var nextVision: V? = null
-    object : MatchingScope<V> {
-        override fun <A : Any, W : V> match(
-            actionClass: Class<A>,
-            visionClass: Class<W>,
-            update: MatchedScope<A, W>.() -> V
-        ) {
-            if (nextVision == null) {
-                if (actionClass.isInstance(action) && visionClass.isInstance(vision)) {
-                    val matchedAction = actionClass.cast(action)!!
-                    val matchedVision = visionClass.cast(vision)!!
-                    nextVision = MatchedScope(matchedAction, matchedVision).update()
+) = story(
+    name = name,
+    isLastVision = isLastVision,
+    toFirstVision = toFirstVision,
+    toNextVision = { action: Any ->
+        var nextVision: V? = null
+        object : MatchingScope<V> {
+            override fun <A : Any, W : V> match(
+                actionClass: Class<A>,
+                visionClass: Class<W>,
+                update: MatchedScope<A, W>.() -> V
+            ) {
+                if (nextVision == null) {
+                    if (actionClass.isInstance(action) && visionClass.isInstance(vision)) {
+                        val matchedAction = actionClass.cast(action)!!
+                        val matchedVision = visionClass.cast(vision)!!
+                        nextVision = MatchedScope(matchedAction, matchedVision).update()
+                    }
                 }
             }
-        }
-    }.apply { runBlocking { updateRules() } }
-    nextVision
-}
+        }.apply { runBlocking { updateRules() } }
+        nextVision
+    }
+)
 
 interface Story<V : Any> {
     val name: String
@@ -53,37 +56,38 @@ interface Story<V : Any> {
 
 fun <V : Any> story(
     name: String,
-    init: V,
-    isOver: (V) -> Boolean,
+    isLastVision: (V) -> Boolean,
+    toFirstVision: StoryInitScope<V>.() -> V,
     toNextVision: StoryUpdateScope<V>.(action: Any) -> V?
 ): Story<V> = object : Story<V> {
+    private val coroutineScope = GlobalScope
+
     override val name: String = name
     override val number: Long = Random.nextLong().absoluteValue
-
-    private val coroutineScope = GlobalScope
-    private val visions = ConflatedBroadcastChannel(init)
     private val actions = Channel<Any>(5)
+    private val visions = ConflatedBroadcastChannel<V>()
 
     init {
         coroutineScope.launch {
+            val firstVision = object : StoryInitScope<V> {
+                override val storyName: String = name
+                override val offer: (action: Any) -> Boolean = actions::offer
+                override fun <W : Any> atStoryEnd(
+                    substory: Story<W>,
+                    block: StoryOverScope<W>.() -> Unit
+                ) = whenSubstoryEnds(substory, block)
+            }.toFirstVision()
+            visions.sendBlocking(firstVision)
             for (action in actions) {
                 visions.value.let { vision ->
                     val nextVision = object : StoryUpdateScope<V> {
                         override val storyName = name
                         override val vision = vision
                         override val offer = actions::offer
-                        override fun <W : Any> atStoryEnd(substory: Story<W>, block: StoryOverScope<W>.() -> Unit) {
-                            coroutineScope.launch {
-                                for (subvision in substory.subscribe()) {
-                                    if (substory.isStoryOver(subvision)) {
-                                        object : StoryOverScope<W> {
-                                            override val ending: W? = subvision
-                                        }.block()
-                                        break
-                                    }
-                                }
-                            }
-                        }
+                        override fun <W : Any> atStoryEnd(
+                            substory: Story<W>,
+                            block: StoryOverScope<W>.() -> Unit
+                        ) = whenSubstoryEnds(substory, block)
                     }.toNextVision(action)
                     nextVision?.let { visions.send(it) }
                 }
@@ -91,7 +95,20 @@ fun <V : Any> story(
         }
     }
 
-    override fun isStoryOver(vision: V): Boolean = isOver(vision)
+    fun <W : Any> whenSubstoryEnds(substory: Story<W>, block: StoryOverScope<W>.() -> Unit) {
+        coroutineScope.launch {
+            for (subvision in substory.subscribe()) {
+                if (substory.isStoryOver(subvision)) {
+                    object : StoryOverScope<W> {
+                        override val ending: W? = subvision
+                    }.block()
+                    break
+                }
+            }
+        }
+    }
+
+    override fun isStoryOver(vision: V): Boolean = isLastVision(vision)
     override fun subscribe(): ReceiveChannel<V> = visions.openSubscription()
     override fun offer(action: Any) {
         actions.offer(action)
