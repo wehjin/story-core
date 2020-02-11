@@ -8,7 +8,7 @@ interface StoryUpdateScope<V : Any> : StoryInitScope<V> {
 
 interface StoryInitScope<V : Any> {
     val storyName: String
-    val offer: (action: Any) -> Boolean
+    val offer: (action: Any) -> Unit
     fun <W : Any> atStoryEnd(substory: Story<W>, block: StoryOverScope<W>.() -> Unit)
 }
 
