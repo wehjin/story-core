@@ -3,7 +3,7 @@
  */
 package com.rubyhuntersky.story.core
 
-import com.rubyhuntersky.story.core.scopes.offerAtStoryEnd
+import com.rubyhuntersky.story.core.scopes.offerWhenStoryEnds
 import com.rubyhuntersky.story.core.scopes.on
 import com.rubyhuntersky.story.core.scopes.onAction
 import kotlinx.coroutines.channels.Channel
@@ -105,7 +105,7 @@ class LibraryTest {
             when (action) {
                 is Start -> {
                     val substory = counterStory().also {
-                        atStoryEnd(it) { action.notify.sendBlocking(Unit) }
+                        whenSubstoryEnds(it) { action.notify.sendBlocking(Unit) }
                     }
                     vision.copy(substory = substory)
                 }
@@ -137,7 +137,7 @@ class LibraryTest {
             when (action) {
                 is Start -> {
                     val substory = counterStory().also {
-                        offerAtStoryEnd(it) { NotifyTop(action.notify) }
+                        offerWhenStoryEnds(it) { NotifyTop(action.notify) }
                     }
                     vision.copy(substory = substory)
                 }

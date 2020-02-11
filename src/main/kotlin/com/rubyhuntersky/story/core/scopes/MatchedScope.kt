@@ -1,6 +1,6 @@
 package com.rubyhuntersky.story.core.scopes
 
-data class MatchedScope<A : Any, W : Any>(
-    val action: A,
+interface MatchedScope<A : Any, V : Any, W : V> : StoryInitScope<V> {
+    val action: A
     val vision: W
-)
+}

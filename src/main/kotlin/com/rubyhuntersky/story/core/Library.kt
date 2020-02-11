@@ -26,18 +26,28 @@ fun <V : Any> matchingStory(
     isLastVision = isLastVision,
     toFirstVision = toFirstVision,
     toNextVision = { action: Any ->
+
         var nextVision: V? = null
         object : MatchingScope<V> {
             override fun <A : Any, W : V> match(
                 actionClass: Class<A>,
                 visionClass: Class<W>,
-                update: MatchedScope<A, W>.() -> V
+                update: MatchedScope<A, V, W>.() -> V
             ) {
                 if (nextVision == null) {
                     if (actionClass.isInstance(action) && visionClass.isInstance(vision)) {
                         val matchedAction = actionClass.cast(action)!!
                         val matchedVision = visionClass.cast(vision)!!
-                        nextVision = MatchedScope(matchedAction, matchedVision).update()
+                        nextVision = object : MatchedScope<A, V, W> {
+                            override val action: A = matchedAction
+                            override val vision: W = matchedVision
+                            override val storyName: String = this@story.storyName
+                            override val offer: (action: Any) -> Boolean = this@story.offer
+                            override fun <W : Any> whenSubstoryEnds(
+                                substory: Story<W>,
+                                block: StoryOverScope<W>.() -> Unit
+                            ) = this@story.whenSubstoryEnds(substory, block)
+                        }.update()
                     }
                 }
             }
@@ -72,10 +82,10 @@ fun <V : Any> story(
             val firstVision = object : StoryInitScope<V> {
                 override val storyName: String = name
                 override val offer: (action: Any) -> Boolean = actions::offer
-                override fun <W : Any> atStoryEnd(
+                override fun <W : Any> whenSubstoryEnds(
                     substory: Story<W>,
                     block: StoryOverScope<W>.() -> Unit
-                ) = whenSubstoryEnds(substory, block)
+                ) = runWhenSubstoryEnds(substory, block)
             }.toFirstVision()
             visions.sendBlocking(firstVision)
             for (action in actions) {
@@ -84,10 +94,10 @@ fun <V : Any> story(
                         override val storyName = name
                         override val vision = vision
                         override val offer = actions::offer
-                        override fun <W : Any> atStoryEnd(
+                        override fun <W : Any> whenSubstoryEnds(
                             substory: Story<W>,
                             block: StoryOverScope<W>.() -> Unit
-                        ) = whenSubstoryEnds(substory, block)
+                        ) = runWhenSubstoryEnds(substory, block)
                     }.toNextVision(action)
                     nextVision?.let { visions.send(it) }
                 }
@@ -95,7 +105,7 @@ fun <V : Any> story(
         }
     }
 
-    fun <W : Any> whenSubstoryEnds(substory: Story<W>, block: StoryOverScope<W>.() -> Unit) {
+    private fun <W : Any> runWhenSubstoryEnds(substory: Story<W>, block: StoryOverScope<W>.() -> Unit) {
         coroutineScope.launch {
             for (subvision in substory.subscribe()) {
                 if (substory.isStoryOver(subvision)) {
